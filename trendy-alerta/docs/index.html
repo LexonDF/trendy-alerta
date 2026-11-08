@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ff2d87">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trendy Alerta">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Trendy Alerta</title>
+<style>
+:root{--pink:#ff2d87;--pink2:#ff6fb1;--bg:#fff5fa;--card:#fff;--ink:#2a1020;--mute:#8a6b7b;--ok:#12a150;--line:#f6d3e3}
+@media(prefers-color-scheme:dark){:root{--bg:#190a13;--card:#26111c;--ink:#fde8f2;--mute:#c79bb2;--line:#3d1b2d}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:0 16px calc(24px + env(safe-area-inset-bottom))}
+header{padding:calc(20px + env(safe-area-inset-top)) 0 12px;display:flex;align-items:center;gap:12px}
+header img{width:44px;height:44px;border-radius:12px}
+h1{font-size:20px;margin:0}
+header p{margin:0;color:var(--mute);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}
+.status{display:flex;gap:12px;align-items:center}
+.dot{width:12px;height:12px;border-radius:50%;background:#bbb;flex:none}
+.dot.on{background:var(--ok);box-shadow:0 0 0 4px #12a15022;animation:p 2s infinite}
+@keyframes p{50%{box-shadow:0 0 0 8px #12a15000}}
+.status b{display:block}.status span{color:var(--mute);font-size:13px}
+.btn{display:block;width:100%;text-align:center;border:0;border-radius:14px;padding:15px;font-weight:600;font-size:16px;font-family:inherit;text-decoration:none;cursor:pointer;color:#fff;background:linear-gradient(135deg,var(--pink),var(--pink2));margin-top:10px}
+.btn.alt{background:transparent;color:var(--pink);border:1.5px solid var(--pink)}
+.btn.big{font-size:18px;padding:18px}
+.btn[disabled]{opacity:.5}
+h2{font-size:15px;margin:0 0 8px}
+.alert{border-top:1px solid var(--line);padding:10px 0}
+.alert:first-of-type{border-top:0}
+.alert b{display:block}.alert small{color:var(--mute)}
+.alert a{color:var(--pink);font-weight:600;text-decoration:none}
+.alert.hot b{color:var(--pink)}
+.empty{color:var(--mute);font-size:14px}
+ol{padding-left:20px;margin:6px 0}li{margin:6px 0}
+input{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit}
+details summary{cursor:pointer;color:var(--mute);font-size:14px}
+.warn{background:#fff3cd;color:#664d03;border-radius:12px;padding:10px 12px;font-size:14px;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <img src="icon-192.png" alt="">
+  <div><h1>Trendy Alerta</h1><p>Calendario de Adviento · Trendy Shop</p></div>
+</header>
+
+<section class="card" id="statusCard">
+  <div class="status"><i class="dot" id="dot"></i><div><b id="stTitle">Conectando…</b><span id="stSub"></span></div></div>
+  <a class="btn big" id="buy" href="https://www.maquillajetrendyshop.com/" target="_blank" rel="noopener">🛍️ Ir a la tienda</a>
+  <button class="btn alt" id="enable">🔔 Activar alertas en este celular</button>
+  <div class="warn" id="iosWarn" hidden>En iPhone: primero toca <b>Compartir → Añadir a pantalla de inicio</b> y abre la app desde ahí; si no, iOS no permite notificaciones.</div>
+</section>
+
+<section class="card">
+  <h2>Avisos recibidos</h2>
+  <div id="list"><p class="empty">Aún no hay avisos. Cuando salga el calendario, aparecerá aquí con el botón de compra.</p></div>
+</section>
+
+<section class="card">
+  <h2>Para que te llegue aunque cierres la app</h2>
+  <p class="empty" style="margin-top:0">Esta pantalla solo recibe avisos mientras está abierta. Las alertas en segundo plano las entrega la app gratuita <b>ntfy</b>:</p>
+  <ol>
+    <li>Instala <b>ntfy</b> (Play Store / App Store).</li>
+    <li>Toca <b>+</b> y suscríbete al tema: <b id="topicShow"></b></li>
+    <li>Pon el tema en <i>prioridad máxima</i> y desactiva el ahorro de batería para ntfy.</li>
+  </ol>
+  <button class="btn alt" id="openNtfy">Abrir en ntfy</button>
+  <button class="btn alt" id="test">Enviar notificación de prueba</button>
+</section>
+
+<section class="card">
+  <details>
+    <summary>Ajustes</summary>
+    <p class="empty">Tema de ntfy (el mismo que guardaste como secreto <code>NTFY_TOPIC</code>):</p>
+    <input id="topicInput" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="trendy-adviento-xxxxxxxx">
+    <button class="btn" id="save">Guardar</button>
+  </details>
+</section>
+
+<script>
+const NTFY = "https://ntfy.sh";
+const STORE = "https://www.maquillajetrendyshop.com/";
+const $ = id => document.getElementById(id);
+const ls = {get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// El tema puede venir en el enlace: …/#t=mi-tema  (se guarda y se borra de la barra)
+const m = location.hash.match(/t=([\w.-]+)/);
+if (m) { ls.set("topic", m[1]); history.replaceState(null, "", location.pathname); }
+let topic = ls.get("topic") || "";
+let alerts = []; try { alerts = JSON.parse(ls.get("alerts") || "[]"); } catch (e) {}
+let es = null, reg = null;
+
+$("topicInput").value = topic;
+$("topicShow").textContent = topic || "(configúralo en Ajustes)";
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+if (isIOS && !standalone) $("iosWarn").hidden = false;
+
+function render() {
+  const list = $("list");
+  if (!alerts.length) return;
+  list.innerHTML = alerts.map(a => {
+    const hot = a.priority >= 4;
+    const when = new Date(a.time * 1000).toLocaleString("es-CO", {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"});
+    return `<div class="alert ${hot ? "hot" : ""}"><b>${esc(a.title || "Aviso")}</b>${esc(a.message || "").replace(/\n/g, "<br>")}<br><small>${when}</small>${a.click ? `<br><a href="${esc(a.click)}" target="_blank" rel="noopener">Abrir enlace de compra →</a>` : ""}</div>`;
+  }).join("");
+  const last = alerts.find(a => a.click && a.priority >= 4);
+  if (last) { $("buy").href = last.click; $("buy").textContent = "🛍️ COMPRAR AHORA"; }
+}
+
+async function show(a) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const opts = {body: a.message || "", icon: "icon-192.png", badge: "icon-192.png", tag: a.id,
+                requireInteraction: a.priority >= 4, vibrate: a.priority >= 4 ? [300,150,300,150,600] : [100],
+                data: {url: a.click || STORE}};
+  try { (reg || await navigator.serviceWorker.ready).showNotification(a.title || "Trendy Alerta", opts); }
+  catch (e) { new Notification(a.title || "Trendy Alerta", opts); }
+}
+
+function connect() {
+  if (es) es.close();
+  if (!topic) { setStatus(false, "Falta el tema", "Ábrelo en Ajustes"); return; }
+  const since = ls.get("lastId") || "12h";
+  es = new EventSource(`${NTFY}/${encodeURIComponent(topic)}/sse?since=${encodeURIComponent(since)}`);
+  es.onopen = () => setStatus(true, "Vigilando la tienda", "Conectado · el servidor revisa cada ~45 s");
+  es.onerror = () => setStatus(false, "Reconectando…", "Sin conexión con el servicio de avisos");
+  es.onmessage = ev => {
+    let a; try { a = JSON.parse(ev.data); } catch (e) { return; }
+    if (a.event !== "message") return;
+    ls.set("lastId", a.id);
+    if (alerts.some(x => x.id === a.id)) return;
+    if ((a.priority || 3) <= 1) return;             // el latido diario no se lista
+    alerts.unshift({id:a.id, time:a.time, title:a.title, message:a.message, click:a.click, priority:a.priority || 3});
+    alerts = alerts.slice(0, 40); ls.set("alerts", JSON.stringify(alerts));
+    render(); show(a);
+  };
+}
+function setStatus(on, t, s) { $("dot").className = "dot" + (on ? " on" : ""); $("stTitle").textContent = t; $("stSub").textContent = s; }
+
+$("enable").onclick = async () => {
+  if (!("Notification" in window)) { alert("Este navegador no soporta notificaciones. Usa la app ntfy (ver abajo)."); return; }
+  const p = await Notification.requestPermission();
+  $("enable").textContent = p === "granted" ? "🔔 Alertas activadas" : "🔕 Permiso denegado (actívalo en ajustes del navegador)";
+  if (p === "granted") show({id: "ok" + Date.now(), title: "Trendy Alerta activa", message: "Te avisaré apenas salga el calendario.", priority: 3});
+};
+$("save").onclick = () => {
+  topic = $("topicInput").value.trim(); ls.set("topic", topic); ls.set("lastId", "");
+  $("topicShow").textContent = topic || "(configúralo en Ajustes)"; connect();
+};
+$("openNtfy").onclick = () => { if (topic) location.href = `ntfy://ntfy.sh/${topic}`; setTimeout(() => window.open(`${NTFY}/${topic}`, "_blank"), 600); };
+$("test").onclick = async () => {
+  if (!topic) return alert("Primero guarda el tema en Ajustes.");
+  try {
+    await fetch(NTFY + "/", {method: "POST", body: JSON.stringify({topic, title: "🔔 Prueba de Trendy Alerta", message: "Si ves esto, las alertas funcionan.", priority: 4, click: STORE, tags: ["bell"]})});
+  } catch (e) { alert("No pude enviar la prueba. ¿Tienes internet?"); }
+};
+if ("Notification" in window && Notification.permission === "granted") $("enable").textContent = "🔔 Alertas activadas";
+document.addEventListener("visibilitychange", () => { if (!document.hidden) connect(); });
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").then(r => reg = r).catch(() => {});
+render(); connect();
+</script>
+</body>
+</html>
